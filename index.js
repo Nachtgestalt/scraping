@@ -6,9 +6,6 @@ const url = 'https://ojp.puebla.gob.mx';
 let linkList = [];
 let dlinkList = [];
 
-var indexPage = 1;
-var totalPages = 1;
-
 const getWebsiteLinks = async (url) => {
     try {
         const response = await axios.get(url);
@@ -50,50 +47,55 @@ const getWebsiteLinks = async (url) => {
 //     }
 // };
 
-const downloadLinks = async () => {
+const visitSections = async () => {
     for (const linkToSection of linkList) {
+        let totalPages = 1;
         try {
             const response = await axios.get(linkToSection);
-            // const response = await axios.get(
-            //     'https://ojp.puebla.gob.mx/index.php/reglas-de-operacion'
-            // );
             const $ = cheerio.load(response.data);
-            totalPages = getTotalPages($);
-            $('article').each(function (i, elem) {
-                let name = $(elem).find('header').text();
-                name = name
-                    .replace(/[^a-zA-Z ]/g, '')
-                    .trimStart()
-                    .trimEnd()
-                    .replace(/\s/g, '_');
-                let link = $(elem)
-                    .find('a.element-download-button')
-                    .attr('href');
-
-                dlinkList.push({
-                    name: name,
-                    dlink: url + link,
-                });
-            });
-        } catch (error) {
+            totalPages = await getTotalPages($);
+            for(let i = 1; i <= totalPages; i++) {
+                let nextPageLink = `${linkToSection}/${i}`;
+                console.log(nextPageLink);
+                
+                setTimeout(() => {
+                    downloadLinks(nextPageLink); // Call itself
+                }, 3000);
+            }
+        }
+        catch(error) {
             console.log(error);
         }
-
-        indexPage++;
-
-        if (indexPage === totalPages) {
-            return false;
-        }
-        // const nextPageLink = `${linkToSection}/${indexPage}`;
-        //  setTimeout(() => {
-        //      getWebsiteContent(nextPageLink); // Call itself
-        //  }, 3000);
+        
     }
     // fs.writeFile('links.json', JSON.stringify(dlinkList), 'utf8', (err) => {
     //     if (err) throw err;
     //     console.log('complete');
     // });
-    // console.log(dlinkList);
+    console.log(dlinkList);
+}
+
+const downloadLinks = async (url) => {
+    try{
+        $('article').each(function (i, elem) {
+            let name = $(elem).find('header').text();
+            name = name
+                .replace(/[^a-zA-Z ]/g, '')
+                .trimStart()
+                .trimEnd()
+                .replace(/\s/g, '_');
+            let link = $(elem)
+                .find('a.element-download-button')
+                .attr('href');
+
+            dlinkList.push({
+                name: name,
+                dlink: url + link,
+            });
+        });
+    } catch (error) {
+        console.log(error);
+    }
 };
 
 const downloadFiles = async (dlinkList) => {
@@ -121,7 +123,7 @@ const getTotalPages = async (data) => {
     try {
         let lastPage = data('div.pagination').find('a.last').attr('href');
         if (lastPage === undefined) {
-            return;
+            return 1;
         }
         const responseLastPage = await axios.get(url + lastPage);
         const $lastPage = cheerio.load(responseLastPage.data);
@@ -135,6 +137,6 @@ const getTotalPages = async (data) => {
 
 (async () => {
     await getWebsiteLinks(url);
-    await downloadLinks(linkList);
-    // await downloadFiles(dlinkList);
+    await visitSections(linkList);
+    await downloadFiles(dlinkList);
 })();
