@@ -51,15 +51,16 @@ const visitSections = async () => {
     for (const linkToSection of linkList) {
         let totalPages = 1;
         try {
+            // console.log(linkToSection.match(/\/([^\/]+)\/?$/)[1])
+            createDir(linkToSection.match(/\/([^\/]+)\/?$/)[1]);
             const response = await axios.get(linkToSection);
             const $ = cheerio.load(response.data);
             totalPages = await getTotalPages($);
             for(let i = 1; i <= totalPages; i++) {
                 let nextPageLink = `${linkToSection}/${i}`;
-                console.log(nextPageLink);
                 
                 setTimeout(() => {
-                    downloadLinks(nextPageLink); // Call itself
+                    downloadLinks(nextPageLink, linkToSection); // Call itself
                 }, 3000);
             }
         }
@@ -68,15 +69,12 @@ const visitSections = async () => {
         }
         
     }
-    // fs.writeFile('links.json', JSON.stringify(dlinkList), 'utf8', (err) => {
-    //     if (err) throw err;
-    //     console.log('complete');
-    // });
-    console.log(dlinkList);
 }
 
-const downloadLinks = async (url) => {
+const downloadLinks = async (nextUrl, linkToSection) => {
     try{
+        const response = await axios.get(nextUrl);
+        const $ = cheerio.load(response.data);
         $('article').each(function (i, elem) {
             let name = $(elem).find('header').text();
             name = name
@@ -84,13 +82,17 @@ const downloadLinks = async (url) => {
                 .trimStart()
                 .trimEnd()
                 .replace(/\s/g, '_');
+            name = name.substring(0, 50);
             let link = $(elem)
                 .find('a.element-download-button')
                 .attr('href');
-
+            let nameDir = linkToSection.match(/\/([^\/]+)\/?$/)[1];
+            // console.log(nameDir)
+                
             dlinkList.push({
                 name: name,
                 dlink: url + link,
+                nameDir
             });
         });
     } catch (error) {
@@ -99,10 +101,11 @@ const downloadLinks = async (url) => {
 };
 
 const downloadFiles = async (dlinkList) => {
+    saveToFile();
     for (const link of dlinkList) {
         let name = link.name + '.pdf';
         let url = link.dlink;
-        let file = fs.createWriteStream(name);
+        let file = fs.createWriteStream(`./${link.nameDir}/${name}`);
         console.log(url);
         try {
             if (url !== undefined) {
@@ -128,15 +131,32 @@ const getTotalPages = async (data) => {
         const responseLastPage = await axios.get(url + lastPage);
         const $lastPage = cheerio.load(responseLastPage.data);
         let lastIndex = $lastPage('div.pagination').find('strong').text();
-        console.log(lastIndex);
         return lastIndex;
     } catch (error) {
         console.log(error);
     }
 };
 
+const createDir = (dirName) => {
+    
+    console.log(dirName);
+    let dir = `./${dirName}`;
+
+    if (!fs.existsSync(dir)){
+        fs.mkdirSync(dir);
+    }
+}
+
+const saveToFile = () => {
+    fs.writeFile('links.json', JSON.stringify(dlinkList), 'utf8', (err) => {
+        if (err) throw err;
+        console.log('complete');
+    });
+}
+
 (async () => {
     await getWebsiteLinks(url);
     await visitSections(linkList);
     await downloadFiles(dlinkList);
+    
 })();
